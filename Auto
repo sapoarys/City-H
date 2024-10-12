@@ -1,0 +1,136 @@
+// ==UserScript==
+// @name        city-holder.com
+// @namespace   Violentmonkey Scripts
+// @match       https://app.city-holder.com/city/build*
+// @grant       none
+// @version     1.0
+// @author      lab404
+// @description 24.09.2024, 10:40:28
+// ==/UserScript==
+(function() {
+    'use strict';
+
+    const scanAndUpgradeBestBuilding = () => {
+        const navItems = document.querySelectorAll('._navItem_r4hf3_24'); // Новый селектор вкладок
+        const availableBuildings = []; // Список всех доступных строений
+        let index = 0; // Индекс для навигации по вкладкам
+
+        const openBuildingCard = (building) => {
+            const actionButton = building.querySelector('button._upgrade_afxdk_63, button._action_afxdk_45');
+            if (actionButton && !actionButton.disabled) {
+                actionButton.click(); // Кликаем по кнопке для открытия карточки
+                console.log(`Открыли карточку: ${building.querySelector('._title_a5uob_72').textContent}`);
+            } else {
+                console.log('Кнопка для действия не найдена или недоступна.');
+            }
+        };
+
+        const upgradeBuilding = () => {
+            const upgradeButton = document.querySelector('button._button_afxdk_1._upgrade_afxdk_63._normal_afxdk_194');
+            const buildButton = document.querySelector('button._button_afxdk_1._action_afxdk_45._normal_afxdk_194');
+
+            if (upgradeButton && !upgradeButton.disabled) {
+                upgradeButton.click(); // Нажимаем кнопку "Улучшить"
+                console.log('Кнопка "Улучшить" нажата!');
+            } else if (buildButton && !buildButton.disabled) {
+                buildButton.click(); // Нажимаем кнопку "Построить"
+                console.log('Кнопка "Построить" нажата!');
+            } else {
+                console.log('Кнопки для прокачки не найдены или недоступны.');
+            }
+        };
+
+        const processNavItem = () => {
+            if (index >= navItems.length) {
+                // Когда все вкладки обработаны, сортируем и находим самую эффективную карточку
+                if (availableBuildings.length > 0) {
+                    // Сортируем по эффективности (в порядке убывания)
+                    availableBuildings.sort((a, b) => b.efficiency - a.efficiency);
+
+                    // Открываем и улучшаем самую эффективную карточку
+                    const bestBuilding = availableBuildings[0];
+                    console.log(`Открываем и улучшаем самое эффективное строение: ${bestBuilding.name}`);
+
+                    // Находим вкладку для самой выгодной карточки
+                    const correspondingNavItem = navItems[bestBuilding.navIndex];
+                    correspondingNavItem.click(); // Кликаем по нужной вкладке
+
+                    // Даем время загрузить карточку
+                    setTimeout(() => {
+                        const allBuildings = document.querySelectorAll('._main_a5uob_99');
+                        const buildingElement = Array.from(allBuildings).find(building => {
+                            return building.querySelector('._title_a5uob_72')?.textContent === bestBuilding.name;
+                        });
+
+                        if (buildingElement) {
+                            openBuildingCard(buildingElement); // Открываем карточку
+
+                            // Даем время для загрузки карточки перед прокачкой
+                            setTimeout(() => {
+                                upgradeBuilding(); // Прокачиваем карточку
+                            }, 2000); // Задержка для загрузки карточки
+                        }
+                    }, 2000); // Задержка для загрузки карточки
+                } else {
+                    console.log("Нет доступных улучшений или построек.");
+                }
+                return; // Завершаем процесс, когда все вкладки пройдены
+            }
+
+            const navItem = navItems[index];
+
+            // Проверяем, активна ли текущая вкладка
+            if (!navItem.classList.contains('active')) {
+                navItem.click(); // Если не активна, кликаем для открытия
+            }
+
+            // Задержка для загрузки объектов после клика по вкладке
+            setTimeout(() => {
+                const allBuildings = document.querySelectorAll('._main_a5uob_99');
+
+                allBuildings.forEach(building => {
+                    const buildingName = building.querySelector('._title_a5uob_72')?.textContent || 'Неизвестное строение';
+                    const actionButton = building.querySelector('button');
+                    const growthElements = building.querySelectorAll('._growthItem_1rfbx_26'); // Получаем все улучшения
+                    const priceElement = building.querySelector('._price_1rfbx_41'); // Получаем стоимость
+
+                    // Суммируем значения всех улучшений (если их несколько)
+                    let totalGrowth = 0;
+                    growthElements.forEach(growthElement => {
+                        const growthValue = parseFloat(growthElement.textContent.replace(/[^\d.]/g, ''));
+                        totalGrowth += growthValue || 0; // Добавляем значение к общему улучшению
+                    });
+
+                    // Получаем цену
+                    const priceInfo = priceElement ? parseFloat(priceElement.textContent.replace(/[^\d.]/g, '')) : 0;
+
+                    if (actionButton && !actionButton.disabled && (actionButton.textContent.includes('Улучшить') || actionButton.textContent.includes('Построить'))) {
+                        const efficiency = priceInfo > 0 ? (totalGrowth / priceInfo).toFixed(2) : 1; // Рассчитываем эффективность
+                        availableBuildings.push({
+                            name: buildingName,
+                            action: actionButton.textContent.trim(),
+                            growth: totalGrowth,
+                            price: priceInfo,
+                            efficiency: parseFloat(efficiency),
+                            button: actionButton, // Сохраняем кнопку для последующего нажатия
+                            navIndex: index // Сохраняем индекс текущей вкладки
+                        });
+                    }
+                });
+
+                // Переход к следующей вкладке через 4 секунды после обработки текущей
+                setTimeout(() => {
+                    index++; // Переходим к следующей вкладке
+                    processNavItem(); // Обрабатываем следующую вкладку
+                }, 400); // Задержка перед переходом к следующей вкладке
+            }, 200); // Задержка для загрузки объектов после клика по вкладке
+        };
+
+        processNavItem(); // Запускаем обработку вкладок
+    };
+
+    // Запускаем функцию сканирования и автоматической прокачки
+    setInterval(() => {
+        scanAndUpgradeBestBuilding();
+    }, 2000); // Запуск скрипта каждые 2 секунды
+})();
